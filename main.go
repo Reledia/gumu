@@ -9,6 +9,7 @@ import (
 
 	"github.com/alecthomas/kong"
 	"github.com/charmbracelet/lipgloss"
+	kc "github.com/jotaen/kong-completion"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/samber/lo"
@@ -41,12 +42,13 @@ func findProtons() ([]string, error) {
 }
 
 var CLI struct {
-	Prefix PrefixCmd `cmd:"prefix"`
-	Proton ProtonCmd `cmd:"proton"`
+	Prefix     PrefixCmd     `cmd:"prefix" help:"Manage your prefixs"`
+	Proton     ProtonCmd     `cmd:"proton" help:"Manage your proton installations"`
+	Completion kc.Completion `cmd:"" hidden:""`
 }
 
 type ProtonCmd struct {
-	List ProtonListCmd `cmd:"list"`
+	List ProtonListCmd `cmd:"list" help:"List your proton installations" completion-predictor:"protonList"`
 }
 
 type ProtonListCmd struct{}
@@ -57,7 +59,7 @@ func (p *ProtonListCmd) Run() error {
 		log.Error().Err(err).Msg("")
 		return err
 	}
-	protonVersions = lo.Map(protonVersions, func(item string, index int) string {
+	protonVersions = lo.Map(protonVersions, func(item string, _ int) string {
 		return filepath.Base(item)
 	})
 	output := strings.Join(protonVersions, "\n")
@@ -75,8 +77,11 @@ type PrefixListCmd struct{}
 func main() {
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 
-	ctx := kong.Parse(&CLI, kong.UsageOnError())
-	err := ctx.Run(&CLI)
+	parser, _ := kong.New(&CLI, kong.UsageOnError())
+	kc.Register(parser)
+	ctx, err := parser.Parse(os.Args[1:])
+	parser.FatalIfErrorf(err)
+	err = ctx.Run(&CLI)
 	if err != nil {
 		log.Error().Err(err).Send()
 	}

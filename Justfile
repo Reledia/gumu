@@ -1,3 +1,4 @@
+set shell := ["fish", "-c"]
 program_name := "gumu"
 
 build:
@@ -8,5 +9,5 @@ run *args: build
   @{{program_name}} {{args}}
 
 complete: build
-  @./{{program_name}} complete fish > ~/.config/fish/completions/backloggd-cli.fish
+  @./{{program_name}} completion -c fish | source
 

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,13 +10,12 @@ import (
 	"gumu/prefix"
 	"gumu/proton"
 
-	"github.com/alecthomas/kong"
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
-	kc "github.com/jotaen/kong-completion"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/samber/lo"
+	"github.com/urfave/cli/v3"
 )
 
 var styleOutputBox = lipgloss.NewStyle().
@@ -23,21 +23,61 @@ var styleOutputBox = lipgloss.NewStyle().
 	Padding(0, 1).
 	BorderForeground(lipgloss.Color("#9573ff"))
 
-var CLI struct {
-	Debug      bool          `short:"D" help:"Show debug log"`
-	Completion kc.Completion `cmd:"" hidden:""`
-	Prefix     PrefixCmd     `cmd:"prefix" help:"Manage your prefixs"`
-	Proton     ProtonCmd     `cmd:"proton" help:"Manage your proton installations"`
+var cmd = &cli.Command{
+	EnableShellCompletion:  true,
+	UseShortOptionHandling: true,
+	Flags: []cli.Flag{
+		&cli.BoolFlag{
+			Name:    "debug",
+			Aliases: []string{"d"},
+			Value:   false,
+			Usage:   "Print debug logs",
+		},
+	},
+	Commands: []*cli.Command{
+		{
+			Name:  "prefix",
+			Usage: "Manage your prefixs",
+			Commands: []*cli.Command{
+				{
+					Name:   "create",
+					Usage:  "Create a new prefix",
+					Action: PrefixCreateCmd,
+					Flags: []cli.Flag{
+						&cli.StringFlag{
+							Name:  "proton",
+							Value: "",
+							Usage: "Indicate proton to use for the new prefix",
+						},
+						&cli.StringFlag{
+							Name:  "path",
+							Value: "",
+							Usage: "Indicate where to create the new prefix",
+						},
+						&cli.StringFlag{
+							Name:  "name",
+							Value: "",
+							Usage: "Name of the new prefix",
+						},
+					},
+				},
+			},
+		},
+		{
+			Name:  "proton",
+			Usage: "Manage your proton installations",
+			Commands: []*cli.Command{
+				{
+					Name:   "list",
+					Usage:  "List your proton installations",
+					Action: ProtonListCmd,
+				},
+			},
+		},
+	},
 }
 
-type ProtonCmd struct {
-	List ProtonListCmd   `cmd:"list" help:"List your proton installations" completion-predictor:"protonList"`
-	Pick ProtonPickerCmd `cmd:"pick" help:"Temp"`
-}
-
-type ProtonListCmd struct{}
-
-func (p *ProtonListCmd) Run() error {
+func ProtonListCmd(c context.Context, CLI *cli.Command) error {
 	protonVersions, err := proton.FindProtons()
 	if err != nil {
 		log.Error().Err(err).Msg("")
@@ -52,28 +92,7 @@ func (p *ProtonListCmd) Run() error {
 	return nil
 }
 
-type ProtonPickerCmd struct{}
-
-func (p *ProtonPickerCmd) Run() error {
-	protonRunner, err := proton.NewProtonRunner()
-	log.Debug().Any("protonRunner", protonRunner.Path).Send()
-	return err
-}
-
-type PrefixCmd struct {
-	List   PrefixListCmd   `cmd:""`
-	Create PrefixCreateCmd `cmd:""`
-}
-
-type PrefixListCmd struct{}
-
-type PrefixCreateCmd struct {
-	Path   string `help:"Indicate where to create the new prefix"`
-	Proton string `help:"Indicate which proton to use for the new prefix"`
-	Name   string `help:"Name of the new prefix"`
-}
-
-func (p *PrefixCreateCmd) Run() error {
+func PrefixCreateCmd(c context.Context, CLI *cli.Command) error {
 	var path, name, base string
 	var protonRunner proton.ProtonRunner
 	var options prefix.CreatePrefixOptions
@@ -98,19 +117,19 @@ func (p *PrefixCreateCmd) Run() error {
 				Value(&name),
 		))
 
-	if CLI.Prefix.Create.Path == "" {
+	if CLI.String("path") == "" {
 		formPath.Run()
 	} else {
-		path, _ = filepath.Abs(CLI.Prefix.Create.Path)
+		path, _ = filepath.Abs(CLI.String("path"))
 	}
 
-	if CLI.Prefix.Create.Name == "" {
+	if CLI.String("name") == "" {
 		formName.Run()
 	} else {
-		name = strings.TrimSpace(CLI.Prefix.Create.Name)
+		name = strings.TrimSpace(CLI.String("name"))
 	}
 
-	if CLI.Prefix.Create.Proton == "" {
+	if CLI.String("proton") == "" {
 		protonRunner, err = proton.NewProtonRunner()
 		if err != nil {
 			return err
@@ -126,18 +145,13 @@ func (p *PrefixCreateCmd) Run() error {
 func main() {
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 
-	parser, _ := kong.New(&CLI, kong.UsageOnError())
-	kc.Register(parser)
-	ctx, err := parser.Parse(os.Args[1:])
-	parser.FatalIfErrorf(err)
-
-	if CLI.Debug {
+	if cmd.Bool("debug") {
 		zerolog.SetGlobalLevel(zerolog.DebugLevel)
 	} else {
 		zerolog.SetGlobalLevel(zerolog.WarnLevel)
 	}
 
-	err = ctx.Run(&CLI)
+	err := cmd.Run(context.Background(), os.Args)
 	if err != nil {
 		log.Error().Err(err).Send()
 	}

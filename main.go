@@ -18,6 +18,10 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
+func init() {
+	zerolog.SetGlobalLevel(zerolog.WarnLevel)
+}
+
 var styleOutputBox = lipgloss.NewStyle().
 	Border(lipgloss.RoundedBorder()).
 	Padding(0, 1).
@@ -32,6 +36,10 @@ var cmd = &cli.Command{
 			Aliases: []string{"d"},
 			Value:   false,
 			Usage:   "Print debug logs",
+			Action: func(ctx context.Context, c *cli.Command, b bool) error {
+				zerolog.SetGlobalLevel(zerolog.DebugLevel)
+				return nil
+			},
 		},
 	},
 	Commands: []*cli.Command{
@@ -72,6 +80,11 @@ var cmd = &cli.Command{
 					Usage:  "List your proton installations",
 					Action: ProtonListCmd,
 				},
+				{
+					Name:   "download",
+					Usage:  "Download a new proton runner",
+					Action: ProtonDownloadCmd,
+				},
 			},
 		},
 	},
@@ -90,6 +103,10 @@ func ProtonListCmd(c context.Context, CLI *cli.Command) error {
 	output = styleOutputBox.Render(output)
 	fmt.Println(output)
 	return nil
+}
+
+func ProtonDownloadCmd(c context.Context, CLI *cli.Command) error {
+	return proton.DownloadNewProton(c)
 }
 
 func PrefixCreateCmd(c context.Context, CLI *cli.Command) error {
@@ -144,12 +161,6 @@ func PrefixCreateCmd(c context.Context, CLI *cli.Command) error {
 
 func main() {
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
-
-	if cmd.Bool("debug") {
-		zerolog.SetGlobalLevel(zerolog.DebugLevel)
-	} else {
-		zerolog.SetGlobalLevel(zerolog.WarnLevel)
-	}
 
 	err := cmd.Run(context.Background(), os.Args)
 	if err != nil {

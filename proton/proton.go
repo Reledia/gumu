@@ -34,6 +34,27 @@ func FindProtons() ([]string, error) {
 	return protonVersions, nil
 }
 
+func FindProtonsVersions() ([]string, error) {
+	var protonVersionsTag []string
+
+	protonVersions, err := FindProtons()
+	if err != nil {
+		log.Error().Err(err).Send()
+		return protonVersionsTag, err
+	}
+
+	for _, protonVersion := range protonVersions {
+		file := filepath.Join(protonVersion, "version")
+		data, _ := os.ReadFile(file)
+		dataString := string(data)
+
+		version := strings.Fields(dataString)[1]
+		protonVersionsTag = append(protonVersionsTag, version)
+	}
+
+	return protonVersionsTag, nil
+}
+
 type ProtonRunner struct {
 	Path string
 	Wine string

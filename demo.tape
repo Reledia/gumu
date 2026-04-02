@@ -65,7 +65,7 @@ Require gumu
 Set Shell "fish"
 Set FontSize 32
 Set Width 1600
-Set Height 1600
+Set Height 900
 
 Type "gumu proton download" Enter
 

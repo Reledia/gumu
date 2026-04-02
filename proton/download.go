@@ -12,10 +12,12 @@ import (
 	"slices"
 	"strings"
 
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/huh/spinner"
 	"github.com/rs/zerolog/log"
 	"github.com/samber/lo"
+	"github.com/schollz/progressbar/v3"
 )
 
 func DownloadNewProton(c context.Context) error {
@@ -86,11 +88,7 @@ func DownloadNewProton(c context.Context) error {
 		return err
 	}
 
-	err = spinner.New().ActionWithErr(func(c context.Context) error {
-		return downloadAsset(c, url.URL, filepath.Join("./", url.Name), "")
-	}).
-		Title("Downloading...").
-		Run()
+	err = downloadAsset(c, url.URL, filepath.Join("./", url.Name), "")
 	log.Debug().Str("selected", versionSelected).Send()
 	return err
 }
@@ -182,12 +180,34 @@ func downloadAsset(ctx context.Context, url, filepath, token string) error {
 		return fmt.Errorf("download failed: %s", body)
 	}
 
-	out, err := os.Create(filepath)
+	file, err := os.Create(filepath)
 	if err != nil {
 		return err
 	}
-	defer out.Close()
+	defer file.Close()
 
-	_, err = io.Copy(out, resp.Body)
+	foreground := lipgloss.Color("#32348F")
+	style := lipgloss.NewStyle().Foreground(lipgloss.Lighten(foreground, 0.05))
+	saucer := style.Foreground(lipgloss.Lighten(foreground, 0.10)).Render("█")
+
+	bar := progressbar.NewOptions(
+		int(resp.ContentLength),
+		progressbar.OptionEnableColorCodes(true),
+		progressbar.OptionShowBytes(true),
+		progressbar.OptionSetDescription(style.Render("Downloading...")),
+		progressbar.OptionClearOnFinish(),
+		progressbar.OptionUseANSICodes(true),
+		progressbar.OptionSetPredictTime(true),
+		progressbar.OptionShowCount(),
+		progressbar.OptionSetTheme(progressbar.Theme{
+			Saucer:        saucer,
+			SaucerPadding: " ",
+			BarStart:      "|",
+			BarEnd:        "|",
+		}),
+	)
+
+	_, err = io.Copy(io.MultiWriter(file, bar), resp.Body)
+	fmt.Println() // newline after progress finishes
 	return err
 }

@@ -12,6 +12,8 @@ import (
 	"slices"
 	"strings"
 
+	"gumu/config"
+
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/huh/spinner"
@@ -20,8 +22,8 @@ import (
 	"github.com/schollz/progressbar/v3"
 )
 
-func DownloadNewProton(c context.Context) error {
-	repos := []string{"cachyos/proton-cachyos", "GloriousEggroll/proton-ge-custom"}
+func DownloadNewProton(c context.Context, conf *config.Config) error {
+	repos := conf.ConfigProton.Repos
 	reposLinks := make(map[string][]apiRelease, 10)
 	protonVersionsInstalled, err := FindProtonsVersions()
 	log.Debug().Strs("installed", protonVersionsInstalled).Send()

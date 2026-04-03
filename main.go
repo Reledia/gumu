@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"gumu/config"
 	"gumu/prefix"
 	"gumu/proton"
 
@@ -22,10 +23,14 @@ func init() {
 	zerolog.SetGlobalLevel(zerolog.WarnLevel)
 }
 
-var styleOutputBox = lipgloss.NewStyle().
-	Border(lipgloss.RoundedBorder()).
-	Padding(0, 1).
-	BorderForeground(lipgloss.Color("#9573ff"))
+var (
+	styleOutputBox = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			Padding(0, 1).
+			BorderForeground(lipgloss.Color("#9573ff"))
+
+	conf, _ = config.LoadConf()
+)
 
 var cmd = &cli.Command{
 	EnableShellCompletion:  true,
@@ -87,6 +92,20 @@ var cmd = &cli.Command{
 				},
 			},
 		},
+		{
+			Name:        "test",
+			Description: "debug commands",
+			Commands: []*cli.Command{
+				{
+					Name: "configWrite",
+					Action: func(ctx context.Context, c *cli.Command) error {
+						conf, err := config.LoadConf()
+						log.Debug().Strs("conf", conf.ConfigProton.Repos).Send()
+						return err
+					},
+				},
+			},
+		},
 	},
 }
 
@@ -106,7 +125,7 @@ func ProtonListCmd(c context.Context, CLI *cli.Command) error {
 }
 
 func ProtonDownloadCmd(c context.Context, CLI *cli.Command) error {
-	return proton.DownloadNewProton(c)
+	return proton.DownloadNewProton(c, conf)
 }
 
 func PrefixCreateCmd(c context.Context, CLI *cli.Command) error {

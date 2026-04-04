@@ -65,7 +65,7 @@ func (p *ProtonRunner) SetPath(path string) {
 	p.Wine = filepath.Join(path, "files/bin/wine")
 }
 
-func NewProtonRunner() (ProtonRunner, error) {
+func NewProtonRunnerFromForm() (ProtonRunner, error) {
 	var newProtonRunner ProtonRunner
 	choices, err := FindProtons()
 	if err != nil {

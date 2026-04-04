@@ -29,7 +29,7 @@ var (
 			Padding(0, 1).
 			BorderForeground(lipgloss.Color("#9573ff"))
 
-	conf, _ = config.LoadConf()
+	conf, err = config.LoadConf()
 )
 
 var cmd = &cli.Command{
@@ -133,9 +133,11 @@ func PrefixCreateCmd(c context.Context, CLI *cli.Command) error {
 	var protonRunner proton.ProtonRunner
 	var options prefix.CreatePrefixOptions
 	var err error
+	var confirm bool
 	base, _ = filepath.Abs("./..")
 
-	formPath := huh.NewForm(
+	confirm = false
+	form := huh.NewForm(
 		huh.NewGroup(
 			huh.NewFilePicker().
 				Title("Prefix location").
@@ -143,43 +145,56 @@ func PrefixCreateCmd(c context.Context, CLI *cli.Command) error {
 				Picking(true).
 				DirAllowed(true).
 				FileAllowed(false).
-				Height(20).
 				Value(&path),
-		))
-	formName := huh.NewForm(
-		huh.NewGroup(
+
 			huh.NewInput().
 				Title("Prefix name").
 				Value(&name),
-		))
 
-	if CLI.String("path") == "" {
-		formPath.Run()
-	} else {
+			huh.NewConfirm().
+				Title("Confirm?").
+				Value(&confirm),
+		).WithHeight(15))
+
+	if CLI.String("path") != "" {
 		path, _ = filepath.Abs(CLI.String("path"))
 	}
-
-	if CLI.String("name") == "" {
-		formName.Run()
-	} else {
+	if CLI.String("name") != "" {
 		name = strings.TrimSpace(CLI.String("name"))
 	}
-
 	if CLI.String("proton") == "" {
-		protonRunner, err = proton.NewProtonRunner()
+		protonRunner, err = proton.NewProtonRunnerFromForm()
+		if err != nil {
+			return err
+		}
+	} else {
+		protonRunner, err = proton.NewProtonRunnerFromPath(CLI.String("proton"))
 		if err != nil {
 			return err
 		}
 	}
 
+	if (protonRunner == proton.ProtonRunner{} || path != "" || name != "") {
+		form.Run()
+	}
 	options.Proton = protonRunner
 	options.Path = path
 	options.Name = name
-	return prefix.CreatePrefix(&options)
+	if confirm {
+		return prefix.CreatePrefix(&options)
+	}
+	return nil
 }
 
 func main() {
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+	if err != nil {
+		panic(err)
+	}
+	err = conf.Save()
+	if err != nil {
+		log.Error().Err(err).Send()
+	}
 
 	err := cmd.Run(context.Background(), os.Args)
 	if err != nil {

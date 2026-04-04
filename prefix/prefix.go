@@ -22,13 +22,6 @@ func CreatePrefix(options *CreatePrefixOptions) error {
 	var err error
 
 	path := filepath.Join(options.Path, options.Name)
-	if (options.Proton == proton.ProtonRunner{}) {
-		options.Proton, err = proton.NewProtonRunner()
-	}
-	if err != nil {
-		return err
-	}
-
 	wineCmd := exec.Command("umu-run", "reg", "/?")
 
 	envs := os.Environ()

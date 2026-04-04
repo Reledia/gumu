@@ -24,6 +24,7 @@ import (
 
 func DownloadNewProton(c context.Context, conf *config.Config) error {
 	repos := conf.ConfigProton.Repos
+	confirm := false
 	reposLinks := make(map[string][]apiRelease, 10)
 	protonVersionsInstalled, err := FindProtonsVersions()
 	log.Debug().Strs("installed", protonVersionsInstalled).Send()
@@ -63,10 +64,16 @@ func DownloadNewProton(c context.Context, conf *config.Config) error {
 					return huh.NewOptions(outputStrings...)
 				}, &repoSelected).
 				Value(&versionSelected),
+
+			huh.NewConfirm().Title("Confirm?").Value(&confirm),
 		),
 	)
 
 	form.Run()
+
+	if !confirm {
+		return nil
+	}
 
 	urlAsset, found := lo.Find(reposLinks[repoSelected], func(v apiRelease) bool {
 		return v.TagName == versionSelected

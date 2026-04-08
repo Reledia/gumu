@@ -20,6 +20,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/samber/lo"
 	"github.com/schollz/progressbar/v3"
+	"golift.io/xtractr"
 )
 
 func DownloadNewProton(c context.Context, conf *config.Config) error {
@@ -37,8 +38,7 @@ func DownloadNewProton(c context.Context, conf *config.Config) error {
 		owner, repoName, _ := strings.Cut(repo, "/")
 		resp, err := listReleases(c, owner, repoName, "")
 		if err != nil {
-			log.Error().Err(err).Send()
-			continue
+			return err
 		}
 		reposLinks[repo] = resp
 	}
@@ -76,7 +76,7 @@ func DownloadNewProton(c context.Context, conf *config.Config) error {
 	}
 
 	urlAsset, found := lo.Find(reposLinks[repoSelected], func(v apiRelease) bool {
-		return v.TagName == versionSelected
+		return v.TagName == strings.Fields(versionSelected)[0]
 	})
 	url, found := lo.Find(urlAsset.Assets, func(v asset) bool {
 		if strings.Contains(v.Name, "tar.xz") && strings.Contains(v.Name, "x86_64") {
@@ -97,8 +97,59 @@ func DownloadNewProton(c context.Context, conf *config.Config) error {
 		return err
 	}
 
-	err = downloadAsset(c, url.URL, filepath.Join("./", url.Name), "")
+	home, _ := os.LookupEnv("HOME")
+	pathOutput := filepath.Join(home, ".local/share/Steam/compatibilitytools.d")
+	pathArchive := filepath.Join(pathOutput, "tmp")
+	os.MkdirAll(pathArchive, 0o755)
+	defer os.RemoveAll(pathArchive)
+	err = downloadAsset(c, url.URL, filepath.Join(pathArchive, url.Name), "")
 	log.Debug().Str("selected", versionSelected).Send()
+	if err != nil {
+		return err
+	}
+
+	finalFolderName := strings.TrimSuffix(url.Name, filepath.Ext(url.Name))
+	finalFolderName = strings.TrimSuffix(finalFolderName, filepath.Ext(finalFolderName))
+	pathOutput = filepath.Join(pathOutput, finalFolderName)
+	err = spinner.New().ActionWithErr(func(ctx context.Context) error {
+		return extractProton(filepath.Join(pathArchive, url.Name), pathOutput)
+	}).Title("Extracting...").Run()
+
+	return err
+}
+
+func extractProton(archive string, path string) error {
+	log.Debug().Str("archive", archive).Str("output path", path).Send()
+	response := make(chan *xtractr.Response)
+	archiveQueue := &xtractr.Xtract{
+		Name:      "archive",
+		CBChannel: response,
+		Filter: xtractr.Filter{
+			Path: archive,
+		},
+	}
+	q := xtractr.NewQueue(&xtractr.Config{
+		Parallel: 1,
+		FileMode: 0o644,
+		DirMode:  0o755,
+	})
+	defer q.Stop()
+
+	q.Extract(archiveQueue)
+	resp := <-response
+	log.Debug().Int("archives", resp.Queued).Msg("Started decompressing")
+	resp = <-response
+	log.Debug().Str("output", resp.Output).Strs("new files", resp.NewFiles).Msg("Finished")
+
+	if resp.Error != nil {
+		return resp.Error
+	}
+	if len(resp.NewFiles) < 1 {
+		return errors.New("No files extracted")
+	}
+
+	newfolder := resp.NewFiles[0]
+	err := os.Rename(newfolder, path)
 	return err
 }
 

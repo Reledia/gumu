@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -97,20 +98,29 @@ func DownloadNewProton(c context.Context, conf *config.Config) error {
 		return err
 	}
 
+	// Download and Extract
 	home, _ := os.LookupEnv("HOME")
 	pathOutput := filepath.Join(home, ".local/share/Steam/compatibilitytools.d")
 	pathArchive := filepath.Join(pathOutput, "tmp")
+
+	// Clean-up on interrupt
 	os.MkdirAll(pathArchive, 0o755)
 	defer os.RemoveAll(pathArchive)
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, os.Interrupt)
+	go func() {
+		_ = <-sig
+		os.RemoveAll(pathArchive)
+		os.Exit(130)
+	}()
+
 	err = downloadAsset(c, url.URL, filepath.Join(pathArchive, url.Name), "")
 	log.Debug().Str("selected", versionSelected).Send()
 	if err != nil {
 		return err
 	}
 
-	finalFolderName := strings.TrimSuffix(url.Name, filepath.Ext(url.Name))
-	finalFolderName = strings.TrimSuffix(finalFolderName, filepath.Ext(finalFolderName))
-	pathOutput = filepath.Join(pathOutput, finalFolderName)
+	pathOutput = filepath.Join(pathOutput, urlAsset.TagName)
 	err = spinner.New().ActionWithErr(func(ctx context.Context) error {
 		return extractProton(filepath.Join(pathArchive, url.Name), pathOutput)
 	}).Title("Extracting...").Run()
